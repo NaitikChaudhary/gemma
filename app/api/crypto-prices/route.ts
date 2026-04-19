@@ -1,6 +1,5 @@
-import { NextResponse } from 'next/server';
-
 export const runtime = 'edge';
+export const preferredRegion = 'iad1';
 
 interface CoinData {
   name: string;
@@ -159,7 +158,7 @@ export async function GET(request: Request) {
       telegramResult = await sendTelegramMessage(message);
     }
 
-    return NextResponse.json({
+    const responseData = {
       success: true,
       timestamp: new Date().toISOString(),
       pricesChecked: allCoins.length,
@@ -177,12 +176,22 @@ export async function GET(request: Request) {
           : '✅ No significant price changes detected in last 5 minutes',
       telegram: telegramResult || undefined,
       forceAlert,
+    };
+
+    return new Response(JSON.stringify(responseData), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    return NextResponse.json(
-      { error: 'Failed to check crypto prices', details: 'Internal server error' },
-      { status: 500 }
-    );
+    const errorData = {
+      error: 'Failed to check crypto prices',
+      details: 'Internal server error',
+    };
+
+    return new Response(JSON.stringify(errorData), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 }
 
