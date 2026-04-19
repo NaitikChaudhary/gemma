@@ -24,7 +24,8 @@ async function fetch5MinuteCandles(
   symbol: string
 ): Promise<{ current: number; previous: number; timestamp: number } | null> {
   try {
-    const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=5m&limit=2`;
+    // Fetch 4 candles to get last 15 minutes of data (4 x 5-minute candles)
+    const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=5m&limit=4`;
     
     const response = await fetch(url, {
       method: 'GET',
@@ -37,17 +38,18 @@ async function fetch5MinuteCandles(
 
     const data = await response.json();
 
-    if (!Array.isArray(data) || data.length < 2) {
+    if (!Array.isArray(data) || data.length < 4) {
       return null;
     }
 
-    const previousClose = parseFloat(data[0][4]);
-    const currentClose = parseFloat(data[1][4]);
-    const currentTime = data[1][0];
+    // Compare price from 15 minutes ago (data[0]) with current price (data[3])
+    const priceFrom15MinutesAgo = parseFloat(data[0][4]);
+    const currentClose = parseFloat(data[3][4]);
+    const currentTime = data[3][0];
 
     return {
       current: currentClose,
-      previous: previousClose,
+      previous: priceFrom15MinutesAgo,
       timestamp: currentTime,
     };
   } catch (error) {
@@ -96,7 +98,7 @@ function formatTelegramMessage(
       (coin) =>
         `💰 <b>${coin.name}</b> (${coin.symbol})\n` +
         `   Price: $${coin.price.toFixed(2)}\n` +
-        `   Change (5min): ${coin.change > 0 ? '📈' : '📉'} ${Math.abs(coin.change).toFixed(2)}%`
+        `   Change (15min): ${coin.change > 0 ? '📈' : '📉'} ${Math.abs(coin.change).toFixed(2)}%`
     )
     .join('\n\n');
 
@@ -172,8 +174,8 @@ export async function GET(request: Request) {
       changedCoins: significantChanges,
       message:
         significantChanges.length > 0
-          ? `🚨 Found ${significantChanges.length} coin(s) with >1% price change in last 5 minutes!`
-          : '✅ No significant price changes detected in last 5 minutes',
+          ? `🚨 Found ${significantChanges.length} coin(s) with >1% price change in last 15 minutes!`
+          : '✅ No significant price changes detected in last 15 minutes',
       telegram: telegramResult || undefined,
       forceAlert,
     };
