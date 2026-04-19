@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-export const runtime = 'nodejs';
+export const runtime = 'edge';
 
 interface CoinData {
   name: string;
@@ -25,7 +25,6 @@ async function fetch5MinuteCandles(
   symbol: string
 ): Promise<{ current: number; previous: number; timestamp: number } | null> {
   try {
-    // Fetch last 2 candles (5 minutes each)
     const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=5m&limit=2`;
     
     const response = await fetch(url, {
@@ -34,21 +33,17 @@ async function fetch5MinuteCandles(
     });
 
     if (!response.ok) {
-      console.warn(`Binance API error for ${symbol}: ${response.status}`);
       return null;
     }
 
     const data = await response.json();
 
     if (!Array.isArray(data) || data.length < 2) {
-      console.warn(`Not enough candle data for ${symbol}`);
       return null;
     }
 
-    // [0] = previous 5m candle, [1] = current 5m candle
-    // Each candle: [time, open, high, low, close, volume, ...]
-    const previousClose = parseFloat(data[0][4]); // Close price of previous candle
-    const currentClose = parseFloat(data[1][4]); // Close price of current candle
+    const previousClose = parseFloat(data[0][4]);
+    const currentClose = parseFloat(data[1][4]);
     const currentTime = data[1][0];
 
     return {
@@ -57,7 +52,6 @@ async function fetch5MinuteCandles(
       timestamp: currentTime,
     };
   } catch (error) {
-    console.error(`Error fetching candles for ${symbol}:`, String(error));
     return null;
   }
 }
@@ -67,7 +61,6 @@ async function sendTelegramMessage(message: string): Promise<{ success: boolean;
   const chatId = process.env.TELEGRAM_CHAT_ID;
 
   if (!botToken || !chatId) {
-    console.warn('Telegram credentials not configured');
     return { success: false, error: 'Telegram credentials not configured' };
   }
 
@@ -84,16 +77,14 @@ async function sendTelegramMessage(message: string): Promise<{ success: boolean;
     });
 
     const data = await response.json();
-    console.log('Telegram API response:', data);
 
     if (data.ok) {
       return { success: true, response: data };
     } else {
-      return { success: false, error: data.description, response: data };
+      return { success: false, error: data.description };
     }
   } catch (error) {
-    console.error('Error sending Telegram message:', error);
-    return { success: false, error: String(error) };
+    return { success: false, error: 'Telegram send failed' };
   }
 }
 
@@ -157,14 +148,12 @@ export async function GET(request: Request) {
 
         allCoins.push(coinInfo);
 
-        // Track significant changes (>1%)
         if (Math.abs(priceChange) > 1 || forceAlert) {
           significantChanges.push(coinInfo);
         }
       }
     });
 
-    // Send Telegram notification if there are significant changes
     if (significantChanges.length > 0) {
       const message = formatTelegramMessage(significantChanges);
       telegramResult = await sendTelegramMessage(message);
@@ -190,15 +179,13 @@ export async function GET(request: Request) {
       forceAlert,
     });
   } catch (error) {
-    console.error('Crypto price check error:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch and check crypto prices', details: String(error) },
+      { error: 'Failed to check crypto prices', details: 'Internal server error' },
       { status: 500 }
     );
   }
 }
 
 export async function POST(request: Request) {
-  // Allow manual trigger of the check
   return GET(request);
 }
