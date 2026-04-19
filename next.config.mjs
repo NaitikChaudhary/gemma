@@ -1,19 +1,19 @@
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
     instrumentationHook: false,
   },
   webpack: (config) => {
-    config.resolve.fallback = {
-      ...config.resolve.fallback,
-      'async_hooks': false,
-      'diagnostics_channel': false,
-      'perf_hooks': false,
+    // Polyfill async_hooks with our empty module
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      'async_hooks': path.resolve(__dirname, './async_hooks.js'),
     };
-    
-    // Ensure async_hooks is treated as external
-    config.externals = config.externals || [];
-    config.externals.push('async_hooks', 'diagnostics_channel', 'perf_hooks');
     
     return config;
   },
