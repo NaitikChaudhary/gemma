@@ -27,7 +27,17 @@ async function fetch5MinuteCandles(
   try {
     // Fetch last 2 candles (5 minutes each)
     const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=5m&limit=2`;
-    const response = await fetch(url);
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+    });
+
+    if (!response.ok) {
+      console.warn(`Binance API error for ${symbol}: ${response.status}`);
+      return null;
+    }
+
     const data = await response.json();
 
     if (!Array.isArray(data) || data.length < 2) {
@@ -47,7 +57,7 @@ async function fetch5MinuteCandles(
       timestamp: currentTime,
     };
   } catch (error) {
-    console.error(`Error fetching candles for ${symbol}:`, error);
+    console.error(`Error fetching candles for ${symbol}:`, String(error));
     return null;
   }
 }
@@ -128,11 +138,14 @@ export async function GET(request: Request) {
 
     let telegramResult: { success: boolean; response?: unknown; error?: string } | null = null;
 
-    // Fetch 5-minute candles for each crypto
-    for (const crypto of MAJOR_CRYPTOS) {
-      const candleData = await fetch5MinuteCandles(crypto.binanceSymbol);
+    // Fetch 5-minute candles for all cryptos in PARALLEL
+    const candlePromises = MAJOR_CRYPTOS.map((crypto) => fetch5MinuteCandles(crypto.binanceSymbol));
+    const candleResults = await Promise.all(candlePromises);
 
+    // Process results
+    candleResults.forEach((candleData, index) => {
       if (candleData) {
+        const crypto = MAJOR_CRYPTOS[index];
         const priceChange = ((candleData.current - candleData.previous) / candleData.previous) * 100;
 
         const coinInfo = {
@@ -149,7 +162,7 @@ export async function GET(request: Request) {
           significantChanges.push(coinInfo);
         }
       }
-    }
+    });
 
     // Send Telegram notification if there are significant changes
     if (significantChanges.length > 0) {
